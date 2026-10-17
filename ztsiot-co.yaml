@@ -1,6 +1,6 @@
 substitutions:
   #購買零件
-  #485 一氧化碳传感器 RS485温湿度+CO三合一0-2000ppm外置精装探头,目前己沒有買485 的都可以 https://item.taobao.com/item.htm?id=601988880101&mi_id=0000GZrhXVW3oEePGfV6-2IR6usZf2SNjvCeOruaUub9XXQ&skuId=4860607848974&spm=tbpc.boughtlist.suborder_itemtitle.1.23102e8d8cxfQM
+  #485 一氧化碳传感器 RS485温湿度+CO三合一0-2000ppm外置精装探头,目前己沒有買485的都可以,我是買含温溼的,買沒温溼的就拿掉下面的温溼sensor  https://item.taobao.com/item.htm?id=601988880101&mi_id=0000GZrhXVW3oEePGfV6-2IR6usZf2SNjvCeOruaUub9XXQ&skuId=4860607848974&spm=tbpc.boughtlist.suborder_itemtitle.1.23102e8d8cxfQM
   #esp32c3 mini https://item.taobao.com/item.htm?id=853184518124&mi_id=0000e1JSiMIpcwRkwr9hOJIpBjcYco61zJ8LUleA4JfFwGA&spm=tbpc.boughtlist.suborder_itemtitle.1.23102e8d8cxfQM
   #485 https://item.taobao.com/item.htm?id=599424074918&mi_id=0000Om7guoiEvGcf7BJXKzy9AToAIRaXukHVF1rj6l5z87c&spm=tbpc.boughtlist.suborder_itemtitle.1.23102e8d8cxfQM
   #DC-DC降压电源模块 5V https://item.taobao.com/item.htm?id=644346322045&mi_id=0000zsxypQkgTOv3hYKI9zrTPNf9GRR6q2MIuE09qk9WUV4&skuId=4634423556341&spm=tbpc.boughtlist.suborder_itemtitle.1.23102e8d8cxfQM
