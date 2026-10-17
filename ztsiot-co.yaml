@@ -1,4 +1,9 @@
 substitutions:
+  #購買零件
+  #esp32c3 mini https://item.taobao.com/item.htm?id=853184518124&mi_id=0000e1JSiMIpcwRkwr9hOJIpBjcYco61zJ8LUleA4JfFwGA&spm=tbpc.boughtlist.suborder_itemtitle.1.23102e8d8cxfQM
+  #485 https://item.taobao.com/item.htm?id=599424074918&mi_id=0000Om7guoiEvGcf7BJXKzy9AToAIRaXukHVF1rj6l5z87c&spm=tbpc.boughtlist.suborder_itemtitle.1.23102e8d8cxfQM
+  #DC-DC降压电源模块 5V https://item.taobao.com/item.htm?id=644346322045&mi_id=0000zsxypQkgTOv3hYKI9zrTPNf9GRR6q2MIuE09qk9WUV4&skuId=4634423556341&spm=tbpc.boughtlist.suborder_itemtitle.1.23102e8d8cxfQM
+  #天线 2.4G中号软内置（37*10mm） https://item.taobao.com/item.htm?id=611353370112&mi_id=0000MZH5o4ZgIwyQ7skiMm_H5xyM5g-xaoCWukjglELcTBU&spm=tbpc.boughtlist.suborder_itemtitle.1.23102e8d8cxfQM
   project_name: "ztsiot-co"
   project_version: "1.0"
   factory: "ztsiot"
