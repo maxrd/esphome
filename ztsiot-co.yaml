@@ -1,0 +1,334 @@
+substitutions:
+  project_name: "ztsiot-co"
+  project_version: "1.0"
+  factory: "ztsiot"
+  model: "co"
+  default_addr: "1"
+
+esphome:
+  name: ${project_name}
+  friendly_name: ${project_name}
+  comment: $project_name
+  name_add_mac_suffix: true
+  project:
+    name: ${factory}.${model}
+    version: "${project_version}"
+
+preferences: 
+  flash_write_interval: 20s
+esp32:
+  #board: esp32dev
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+logger:
+  baud_rate: 0
+
+api:
+
+ota:
+  - platform: esphome
+  - platform: web_server
+
+
+wifi:
+  power_save_mode: none
+  ap:
+
+web_server:
+  port: 80
+
+captive_portal:
+
+globals:
+  - id: cmdrun
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: run_seconds
+    type: int
+    restore_value: yes
+    initial_value: '0'
+  - id: wifi_disconnected_secs
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: modbus_addr_int
+    type: int
+    restore_value: yes
+    initial_value: ${default_addr}  # 機器位置
+
+
+uart:
+  id: uart_bus
+  tx_pin: GPIO21
+  rx_pin: GPIO20
+  baud_rate: 4800  # 设备波特率
+  parity: NONE  # 校验位
+  stop_bits: 1  # 停止位
+  data_bits: 8  # 数据位 (默认是 8)
+modbus:
+  send_wait_time: 200ms
+  uart_id: uart_bus
+  id: mod_bus
+
+modbus_controller:
+  - id: sdm
+    address: ${default_addr}
+    modbus_id: mod_bus
+    update_interval: 5s
+    setup_priority: -10
+    command_throttle: 300ms
+
+button:
+  - platform: factory_reset
+    name: Restart with Factory Default Settings
+    icon: "mdi:restore-alert" # 恢復原廠設定
+  - platform: restart
+    id: restart_button
+    name: "Restart"
+    icon: "mdi:restart" # 重新啟動
+
+number:
+  - platform: template
+    name: "WiFi Reconnect Timeout"
+    id: wifi_reconnect_timeout
+    icon: "mdi:timer-cog-outline" # WiFi 重新連線計時器設定
+    unit_of_measurement: "s"
+    min_value: 60
+    max_value: 3600
+    step: 10
+    restore_value: true
+    initial_value: 300
+    optimistic: true
+    on_value:
+      then:
+        - logger.log:
+            format: "Reconnect timeout changed to %.0f seconds. Resetting disconnect counter."
+            args: [ 'x' ]
+        - globals.set:
+            id: wifi_disconnected_secs
+            value: '0'
+  # --- 溫度校正 ---
+  - platform: modbus_controller
+    modbus_controller_id: sdm
+    id: co_temp_calib
+    name: "溫度校正值**"
+    icon: "mdi:tune-variant" # 校正/調整
+    address: 0x0032
+    value_type: S_WORD
+    unit_of_measurement: "×0.1°C"
+    min_value: -50
+    max_value: 50
+    step: 1
+    mode: box
+
+
+  # --- 濕度校正 ---
+  - platform: modbus_controller
+    modbus_controller_id: sdm
+    id: co_humidity_calib
+    name: "濕度校正值*"
+    icon: "mdi:tune-variant" # 校正/調整
+    address: 0x0035
+    value_type: S_WORD
+    unit_of_measurement: "×0.1%"
+    min_value: -100
+    max_value: 100
+    step: 1
+    mode: box
+
+
+
+  # --- CO 校正 ---
+  - platform: modbus_controller
+    modbus_controller_id: sdm
+    id: co_ppm_calib
+    name: "CO 濃度校正值"
+    icon: "mdi:tune-variant" # 校正/調整
+    address: 0x0038
+    value_type: U_WORD
+    unit_of_measurement: "ppm"
+    min_value: 0
+    max_value: 2000
+    step: 1
+    mode: box
+
+  - platform: template
+    id: co2_limit_value
+    name: "CO告警水位"
+    unit_of_measurement: "ppm"
+    min_value: 10
+    max_value: 200
+    step: 1
+    initial_value: 35
+    restore_value: true
+    optimistic: true
+    mode: box
+    icon: "mdi:alert-decagram" # (已存在) 告警設定
+    on_value:
+      - logger.log:
+          format: "已更新 CO 告警上限為 %.0f ppm"
+          args: [ 'x' ]
+
+
+sensor:
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    icon: "mdi:wifi" # WiFi 訊號
+    update_interval: 60s
+  - platform: uptime
+    name: "Uptime"
+    icon: "mdi:timer-sand" # 運作時間
+    filters:
+      - lambda: return x / 3600;
+    unit_of_measurement: "h"
+    accuracy_decimals: 1
+  - platform: template
+    name: "WiFi Reconnect Countdown"
+    id: wifi_reconnect_countdown
+    icon: "mdi:timer-outline" # 倒數計時
+    unit_of_measurement: "s"
+    accuracy_decimals: 0
+    lambda: |-
+      int remaining = (int)id(wifi_reconnect_timeout).state - id(wifi_disconnected_secs);
+      if (remaining < 0) remaining = 0;
+      return remaining;
+    update_interval: 10s
+  # --- 一氧化碳濃度 ---
+  - platform: modbus_controller
+    modbus_controller_id: sdm
+    name: "CO 濃度"
+    id: co_ppm
+    icon: "mdi:molecule-co" # CO
+    address: 0x0002
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "ppm"
+    accuracy_decimals: 0
+
+  # --- 溫度 ---
+  - platform: modbus_controller
+    modbus_controller_id: sdm
+    name: "CO 感測器溫度"
+    id: co_temp
+    icon: "mdi:thermometer" # 溫度
+    address: 0x0001
+    register_type: holding
+    value_type: S_WORD
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    lambda: |-
+      // 數值放大 10 倍，負溫度以補碼表示
+      return x / 10.0f;
+
+  # --- 濕度 ---
+  - platform: modbus_controller
+    modbus_controller_id: sdm
+    name: "CO 感測器濕度*"
+    id: co_humidity
+    icon: "mdi:water-percent" # 濕度
+    address: 0x0000
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    lambda: |-
+      // 數值放大 10 倍
+      return x / 10.0f;
+
+
+switch:
+  - platform: template
+    name: "WiFi Auto Reconnect"
+    id: wifi_auto_reconnect
+    icon: "mdi:wifi-sync" # WiFi 自動同步/重連
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+select:
+  - platform: template
+    name: "Modbus 地址選擇"
+    id: modbus_addr_select
+    icon: "mdi:serial-port" # Modbus/序列埠
+    optimistic: true
+    restore_value: true
+    initial_option: "1"
+    options:
+      - "1"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+      - "6"
+      - "7"
+      - "8"
+      - "9"
+      - "10"
+    set_action:
+      - lambda: |-
+          int new_addr = atoi(x.c_str());
+          id(modbus_addr_int) = new_addr;        // ✅ 更新全域變數
+          id(sdm).set_address(new_addr);         // ✅ 同時更新 modbus 控制器目標
+          ESP_LOGI("modbus_addr", "切換風機地址到 %d", new_addr);
+
+
+
+status_led:
+  pin:
+    number: GPIO8
+
+interval:
+  - interval: 10s
+    then:
+      - if:
+          condition:
+            wifi.connected:
+          then:
+            - globals.set:
+                id: wifi_disconnected_secs
+                value: '0'
+          else:
+            - lambda: |-
+                id(wifi_disconnected_secs) += 10;
+            - if:
+                condition:
+                  and:
+                    - switch.is_on: wifi_auto_reconnect
+                    - lambda: 'return id(wifi_disconnected_secs) >= (int)id(wifi_reconnect_timeout).state;'
+                then:
+                  - logger.log: "WiFi disconnected too long, restarting..."
+                  - globals.set:
+                      id: wifi_disconnected_secs
+                      value: '0'
+                  - button.press: restart_button
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+    icon: "mdi:information-outline" # 資訊
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      icon: "mdi:ip-network-outline" # IP 位址
+
+binary_sensor:
+  - platform: status
+    name: "Status"
+    icon: "mdi:link-variant" # 連線狀態
+
+  - platform: template
+    id: co2_alarm
+    name: "CO 濃度超限告警"
+    device_class: safety
+    icon: "mdi:alarm-light" # (已存在) 告警燈
+    lambda: |-
+      if (id(co_ppm).state > id(co2_limit_value).state) {
+        return true;  // 超過上限 → 告警
+      } else {
+        return false; // 正常
+      }
+    on_press:
+      - logger.log: "⚠️ 一氧化碳濃度已超過安全上限！"
+      # 可在這裡加入通知動作，如 Telegram、HA 警示、開啟排風等
+    on_release:
+      - logger.log: "✅ 一氧化碳濃度已恢復正常"
