@@ -1,5 +1,8 @@
 api:
 substitutions:
+  #購買零件
+  #esp32c3 mini https://item.taobao.com/item.htm?id=853184518124&mi_id=0000e1JSiMIpcwRkwr9hOJIpBjcYco61zJ8LUleA4JfFwGA&spm=tbpc.boughtlist.suborder_itemtitle.1.23102e8d8cxfQM
+  #智能体脂秤】电池款-珠光白/手机互联测体脂 16.94 rmb https://github.com/maxrd/esphome/blob/main/esp32-bluetooth-proxy-155438.yaml
   name: esp32-bluetooth-proxy-155438
   friendly_name: Bluetooth Proxy 155438
 
