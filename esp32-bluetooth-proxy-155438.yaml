@@ -1,0 +1,258 @@
+api:
+substitutions:
+  name: esp32-bluetooth-proxy-155438
+  friendly_name: Bluetooth Proxy 155438
+
+packages:
+  esphome.bluetooth-proxy: "github://esphome/bluetooth-proxies/esp32-generic/esp32-generic-c3.yaml@main"
+
+esphome:
+  name: ${name}
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# 廣播型體重計 (MAC 由「體重計 MAC」設定；留空則自動接受任何同格式體重計)
+# 廠商 ID 低位元組固定 0xC0；資料 [0..1] = 體重 (大端序, 0.01 kg)，[4..5] = 0A 11 固定碼，[6] = 封包類型
+# 0x24 / 0x25 兩種封包，0x25 時 [2] 固定 0x17，用途未知 (不是溫度：螢幕 27°C 時仍為 0x17)
+# 體重同一數值維持 2 秒視為穩定，發佈一次
+esp32_ble_tracker:
+  on_ble_advertise:
+    - then:
+        - lambda: |-
+            const std::string &want = id(scale_mac).state;
+            if (!want.empty() && str_upper_case(want) != x.address_str()) return;
+
+            static float last_live = -1;
+            static float candidate = -1;
+            static uint32_t candidate_ms = 0;
+            static bool published = false;
+            for (auto &md : x.get_manufacturer_datas()) {
+              const auto &d = md.data;
+              uint16_t cid = md.uuid.get_uuid().uuid.uuid16;
+              if ((cid & 0xFF) != 0xC0 || d.size() < 7 || d[4] != 0x0A || d[5] != 0x11) continue;
+
+              std::string raw = str_sprintf("%04X:", cid);
+              for (auto b : d) raw += str_sprintf("%02X", b);
+              id(scale_raw).publish_state(raw);
+
+              float w = ((d[0] << 8) | d[1]) / 100.0f;
+              if (w != last_live) {
+                last_live = w;
+                id(scale_weight_live).publish_state(w);
+              }
+              uint32_t now = millis();
+              if (w <= 0) {
+                candidate = -1;
+                published = false;
+              } else if (w != candidate) {
+                candidate = w;
+                candidate_ms = now;
+                published = false;
+              } else if (!published && now - candidate_ms >= 2000) {
+                id(scale_weight).publish_state(w);
+                published = true;
+              }
+            }
+
+sensor:
+  - platform: template
+    id: scale_weight
+    name: "體重"
+    unit_of_measurement: kg
+    device_class: weight
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:scale-bathroom
+    update_interval: never
+    on_value:
+      - script.execute: compute_body
+  - platform: template
+    id: body_bmi
+    name: "BMI"
+    state_class: measurement
+    accuracy_decimals: 1
+    icon: mdi:human
+    update_interval: never
+  - platform: template
+    id: body_std_weight
+    name: "標準體重 Std Weight"
+    unit_of_measurement: kg
+    device_class: weight
+    accuracy_decimals: 1
+    update_interval: never
+  - platform: template
+    id: body_obesity
+    name: "肥胖度 Obesity"
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 1
+    icon: mdi:percent
+    update_interval: never
+  - platform: template
+    id: body_fat
+    name: "體脂率 Body Fat（估算）"
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 1
+    icon: mdi:water-percent
+    update_interval: never
+  - platform: template
+    id: user_age
+    name: "年齡 Age"
+    unit_of_measurement: 歲
+    accuracy_decimals: 0
+    icon: mdi:cake-variant
+    update_interval: never
+  - platform: template
+    id: scale_weight_live
+    name: "體重（即時）"
+    unit_of_measurement: kg
+    device_class: weight
+    accuracy_decimals: 2
+    entity_category: diagnostic
+    update_interval: never
+
+text_sensor:
+  - platform: template
+    id: scale_raw
+    name: "體重計原始資料"
+    entity_category: diagnostic
+    disabled_by_default: true
+    update_interval: never
+
+# 使用者資料：在 HA 裝置頁「設定」區輸入，斷電後保留
+number:
+  - platform: template
+    id: user_height
+    name: "身高 Height"
+    unit_of_measurement: cm
+    min_value: 100
+    max_value: 220
+    step: 1
+    initial_value: 170
+    optimistic: true
+    restore_value: true
+    mode: box
+    entity_category: config
+    icon: mdi:human-male-height
+    on_value:
+      - script.execute: compute_body
+  - platform: template
+    id: user_birth_year
+    name: "出生年 Birth Year"
+    unit_of_measurement: 年
+    min_value: 1920
+    max_value: 2100
+    step: 1
+    initial_value: 1986
+    optimistic: true
+    restore_value: true
+    mode: box
+    entity_category: config
+    icon: mdi:cake-variant
+    on_value:
+      - script.execute: compute_body
+  - platform: template
+    id: user_birth_month
+    name: "出生月 Birth Month"
+    unit_of_measurement: 月
+    min_value: 1
+    max_value: 12
+    step: 1
+    initial_value: 1
+    optimistic: true
+    restore_value: true
+    mode: box
+    entity_category: config
+    icon: mdi:calendar-month
+    on_value:
+      - script.execute: compute_body
+  - platform: template
+    id: user_birth_day
+    name: "出生日 Birth Day"
+    unit_of_measurement: 日
+    min_value: 1
+    max_value: 31
+    step: 1
+    initial_value: 1
+    optimistic: true
+    restore_value: true
+    mode: box
+    entity_category: config
+    icon: mdi:calendar-today
+    on_value:
+      - script.execute: compute_body
+
+text:
+  - platform: template
+    id: scale_mac
+    name: "體重計 MAC Scale MAC"
+    mode: text
+    max_length: 17
+    initial_value: "EA:00:01:10:D4:6C"
+    optimistic: true
+    restore_value: true
+    entity_category: config
+    icon: mdi:bluetooth
+
+select:
+  - platform: template
+    id: user_sex
+    name: "性別 Sex"
+    options:
+      - "男"
+      - "女"
+    initial_option: "男"
+    optimistic: true
+    restore_value: true
+    entity_category: config
+    icon: mdi:gender-male-female
+    on_value:
+      - script.execute: compute_body
+
+# BMI = 體重 / 身高²；標準體重 = 22 × 身高²；肥胖度 = (體重 − 標準體重) / 標準體重
+# 體脂率 = Deurenberg (1991)：1.2 × BMI + 0.23 × 年齡 − 10.8 × 性別(男=1) − 5.4
+# 年齡 = 今年 − 出生年，今年生日還沒到再減 1 (時間取自 HA，每天 00:00 重算)
+time:
+  - platform: homeassistant
+    id: ha_time
+    on_time_sync:
+      - script.execute: compute_body
+    on_time:
+      - seconds: 5
+        minutes: 0
+        hours: 0
+        then:
+          - script.execute: compute_body
+
+script:
+  - id: compute_body
+    then:
+      - lambda: |-
+          auto now = id(ha_time).now();
+          float by = id(user_birth_year).state;
+          float bm = id(user_birth_month).state;
+          float bd = id(user_birth_day).state;
+          if (!now.is_valid() || std::isnan(by) || std::isnan(bm) || std::isnan(bd)) return;
+          int age = now.year - (int) by;
+          if (now.month < (int) bm || (now.month == (int) bm && now.day_of_month < (int) bd)) age--;
+          if (age < 0) return;
+          id(user_age).publish_state(age);
+
+          float w = id(scale_weight).state;
+          float h = id(user_height).state / 100.0f;
+          if (std::isnan(w) || w <= 0 || std::isnan(h) || h <= 0) return;
+          auto idx = id(user_sex).active_index();
+          float male = (idx.has_value() && *idx == 0) ? 1.0f : 0.0f;
+
+          float bmi = w / (h * h);
+          float std_w = 22.0f * h * h;
+          float fat = 1.2f * bmi + 0.23f * age - 10.8f * male - 5.4f;
+          id(body_bmi).publish_state(bmi);
+          id(body_std_weight).publish_state(std_w);
+          id(body_obesity).publish_state((w - std_w) / std_w * 100.0f);
+          id(body_fat).publish_state(clamp(fat, 3.0f, 60.0f));
